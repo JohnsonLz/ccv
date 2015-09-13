@@ -117,7 +117,7 @@ void TransAction::rollback() {
 
 void TransAction::cleanTrash_() {
 
-	removeAllInDir(".ccv/trashTmp");
+	removeAllInDir(trashName);
 }
 
 void AddTransAction(const char* fileName) {

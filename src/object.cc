@@ -42,6 +42,7 @@
 #include "ins/object.h"
 #include "ins/list.h"
 #include "ins/md5.h"
+#include "ins/tr.h"
 #include "ins/logcat.h"
 #include "ins/mempool.h"
 #include "ins/file.h"
@@ -86,59 +87,59 @@ void Demo::travel(const char* directory) {
 			char* name = static_cast<char*>(allocate(strlen(buf)+1));
 			strcpy(name, buf);
 			char* md5 = MD5_file(name, MD5LEN);
-			leaf* lf = static_cast<leaf*>(allocate(sizeof(leaf)));
-			new(lf) leaf(md5, name);
+			info* inf = static_cast<info*>(allocate(sizeof(info)));
+			new(inf) info(name, md5, true);
 
-			leaf* tmp = fileList_.search(lf);
+			info* tmp = fileList_.search(inf);
 			if(tmp == NULL) {
-				lf->setPersistence();
-				fileList_.insert(lf);
-				const char* stagePath = ".ccv/stage/";
-				char newPath[bufferSize];
-				strcpy(newPath, stagePath);
-				strncpy(newPath+strlen(stagePath), md5, MD5LEN);
-				newPath[strlen(stagePath)+MD5LEN] = '\0';
+				inf->setPersistence(true);
+				fileList_.insert(inf);
+				const char* stage = packSourceFileName(stagePath, md5);
 				try {
-					copyItem(name, newPath);
-					AddTransAction(newPath);
+					copyItem(name, stage);
+					AddTransAction(stage);
 				}
 				catch(Code c) {
-					log.w("copy item: %s failed", name);
-					closedir(dir);
-					throw c;
+					if(c != Corruption) {
+						log.w("copy item: %s failed", name);
+						dellocate(const_cast<char*>(stage));
+						closedir(dir);
+						throw c;
+					}
 				}
 				log.i("Add item: %s", name);
+				dellocate(const_cast<char*>(stage));
 			}
 			else {
 				if(strncmp(tmp->getRef(), md5, MD5LEN) == 0) {
-					tmp->setPersistence();
+					tmp->setPersistence(true);
 					dellocate(name);
 					dellocate(md5);
-					dellocate(lf);
+					dellocate(inf);
 					continue;
 				}
 				else {
 					dellocate(const_cast<char*>(tmp->getRef()));
 					tmp->setRef(md5);
-					tmp->setPersistence();
-					dellocate(lf);
+					tmp->setPersistence(true);
+					dellocate(inf);
 					log.w("Change item: %s", name);
-					const char* stagePath = ".ccv/stage/";
-					char newPath[bufferSize];
-					strcpy(newPath, stagePath);
-					strncpy(newPath+strlen(stagePath), md5, MD5LEN);
-					newPath[strlen(stagePath)+MD5LEN] = '\0';
+					const char* stage = packSourceFileName(stagePath, md5);
 					try {
-						copyItem(name, newPath);
-						AddTransAction(newPath);
+						copyItem(name, stage);
+						AddTransAction(stage);
 					}
 					catch(Code c) {
-						closedir(dir);
-						log.w("copy %s failed", name);
-						dellocate(name);
-						throw c;
+						if(c != Corruption) {
+							closedir(dir);
+							log.w("copy %s failed", name);
+							dellocate(name);
+							dellocate(const_cast<char*>(stage));
+							throw c;
+						}
 					}
 					dellocate(name);
+					dellocate(const_cast<char*>(stage));
 				}
 			}
 		}
@@ -148,156 +149,81 @@ void Demo::travel(const char* directory) {
 
 void Demo::persistenceDemo() {
 
-	moveItem(".ccv/current",".ccv/trashTmp/current");
-	MoveTransAction(".ccv/current", ".ccv/trashTmp/current");
-
-	FILE* fp = fopen(".ccv/current", "wb+");
-	if(fp == NULL) {
-		log.w("can not open .ccv/current");
-		throw NotFound;
-	}
-	AddTransAction(".ccv/current");
-
-	char size[4];
-	List<leaf>::const_iterator iter;
-	iter = fileList_.start();
-	while(iter != fileList_.end()) {
-		leaf* lf = iter->data;
-		if(!lf->persistence()) {
-			log.w("remove item %s", lf->getName());
-			iter = iter->next;
-			continue;
-		}
-		int length = strlen(lf->getName());
-		encodeFixed32(size, length);
-
-		int write = fwrite(size, 4, 1, fp);
-		if(write == 0) {
-			log.w("IOError: write error");
-			fclose(fp);
-			throw IOError;
-		}
-		write = fwrite(lf->getName(), length, 1, fp);
-		if(write == 0) {
-			log.w("IOError: write error");
-			fclose(fp);
-			throw IOError;
-		}
-		write = fwrite(lf->getRef(), MD5LEN, 1, fp);
-		if(write == 0) {
-			log.w("IOError: write error");
-			fclose(fp);
-			throw IOError;
-		}
-		iter = iter->next;
-	}
-	fclose(fp);
+	char buf[255];
+	strcpy(buf, trashPath);
+	strcpy(buf+strlen(trashPath), "current.tr"); 
+	moveItem(currentName, buf);
+	MoveTransAction(currentName, buf);
+	
+	persistenceTRFile(currentName, &fileList_, persistenceHandler_); 
 }
 
 void Demo::parseStructure(const char* fileName) {
 
-	FILE* fp = fopen(fileName, "rb");
-	if(fp == NULL) {
-		log.w("can not open item: %s", fileName);
-		throw NotFound;
+	try {
+		parseTRFile(fileName, &fileList_, false);
 	}
-
-	char buf[bufferSize];
-	char size[4];
-	int read;
-	int write;
-
-	read = fread(size, 4, 1, fp);
-	if(read == 0) 
-		return;
-	fseek(fp, 0, SEEK_SET);
-	while(true) {
-		read = fread(size, 4, 1, fp);
-		if(read == 0) 
-			break;
-		int length = decodeFixed32(size);
-		read = fread(buf, length, 1, fp);
-		if(read == 0) {
-			log.w("IOError: read error");
-			fclose(fp);
-			throw IOError;
+	catch(Code c) {
+		if(c == Empty) {}
+		else {
+			throw c;
 		}
-		char* name = static_cast<char*>(allocate(length+1));
-		strncpy(name, buf, length);
-		name[length] = '\0';
-
-		read = fread(buf, MD5LEN, 1, fp);
-		if(read == 0) {
-			dellocate(name);
-			log.w("IOError: read error");
-			fclose(fp);
-			throw IOError;
-		}
-		char* md5 = static_cast<char*>(allocate(MD5LEN+1));
-		strncpy(md5, buf, MD5LEN);
-		md5[MD5LEN] = '\0';
-
-		leaf* lf = static_cast<leaf*>(allocate(sizeof(leaf)));
-		new(lf) leaf(md5, name);
-		fileList_.insert(lf);
 	}
 }
-
+	
 void Demo:: persistenceRef() {
 
-	parseStructure(".ccv/current");
-	const char* refPath = ".ccv/ref/";
-	const char* stagePath = ".ccv/stage/";
-	char oldName[bufferSize];
-	char newName[bufferSize];
+	parseStructure(currentName);
+	const char* oldName = NULL;
+	const char* newName = NULL;
 
-	List<leaf>::const_iterator iter;
+	List<info>::const_iterator iter;
 	iter = fileList_.start();
 	while(iter != fileList_.end()) {
 		const char* ref = iter->data->getRef();
-		strcpy(oldName, stagePath);
-		strncpy(oldName+strlen(stagePath), ref, MD5LEN);
-		oldName[strlen(stagePath)+MD5LEN] = '\0';
-		strcpy(newName, refPath);
-		strncpy(newName+strlen(refPath), ref, MD5LEN);
-		newName[strlen(refPath)+MD5LEN] = '\0';
+		if(oldName != NULL)
+			dellocate(const_cast<char*>(oldName));
+		if(newName != NULL)
+			dellocate(const_cast<char*>(newName));
+		oldName = packSourceFileName(stagePath, ref);
+		newName = packSourceFileName(refPath, ref);
 		try {	
 			moveItem(oldName, newName);
 			MoveTransAction(oldName, newName);
 		}
 		catch(Code c) {
-			if(c == IOError)
+			if(c == IOError) {
+				dellocate(const_cast<char*>(newName));
+				dellocate(const_cast<char*>(oldName));
 				throw IOError;
+			}
 		}
 		iter = iter->next;
 	}
-	moveItem(".ccv/stage", ".ccv/trashTmp/stage", true);
-	MoveDirTransAction(".ccv/stage", ".ccv/trashTmp/stage");
-	createDir(".ccv/stage");
-	AddDirTransAction(".ccv/stage");
+	dellocate(const_cast<char*>(newName));
+	dellocate(const_cast<char*>(oldName));
+
+	char buf[bufferSize];
+	strcpy(buf, trashPath);
+	strcpy(buf+strlen(trashPath), "stage");
+	moveItem(stageName, buf, true);
+	MoveDirTransAction(stageName, buf);
+	createDir(stageName);
+	AddDirTransAction(stageName);
 }
 		
-void Demo::checkoutDemo(const char* fileName) {
+void Demo::reverseDemo(const char* fileName) {
 
-	const char* demoPath = ".ccv/demo/";
-	const char* refPath = ".ccv/ref/";
-	const char* trashPath = ".ccv/trashTmp/";
-	char buf[bufferSize];
+	const char* demo = packTRFileName(demoPath, fileName);
+	accessFile(demo);
 
-	strcpy(buf, demoPath);
-	strncpy(buf+strlen(demoPath), fileName, MD5LEN);
-	buf[strlen(demoPath)+MD5LEN] = '\0';
-	accessFile(buf);
-
-	moveItem(".ccv/current", ".ccv/trashTmp/current");
-	MoveTransAction(".ccv/current", ".ccv/trashTmp/current");
-	FILE* fp = fopen(".ccv/current", "wb+");
-	if(fp == NULL) {
-		log.w("create .ccv/current error");
-		throw IOError;
-	}
-	fclose(fp);
-	AddTransAction(".ccv/current");
+	char trashbuf[bufferSize];
+	strcpy(trashbuf, trashPath);
+	strcpy(trashbuf+strlen(trashPath), "current.tr");
+	moveItem(currentName, trashbuf);
+	MoveTransAction(currentName, trashbuf);
+	copyItem(demo, currentName);
+	AddTransAction(demo);
 
 	DIR* dir;
 	struct dirent* file;
@@ -349,47 +275,36 @@ void Demo::checkoutDemo(const char* fileName) {
 	closedir(dir);
 
 	AddDemoTransAction(".");
-	parseStructure(buf);
-	List<leaf>::const_iterator iter;
+	parseStructure(demo);
+	dellocate(const_cast<char*>(demo));
+	List<info>::const_iterator iter;
 	iter = fileList_.start();
 	while(iter != fileList_.end()) {
-		const char* name = iter->data->getName();
+		const char* name = iter->data->getTag();
 		const char* ref = iter->data->getRef();
 		
 		createPath(name);
-		char refName[bufferSize];
-		strcpy(refName, refPath);
-		strncpy(refName+strlen(refPath), ref, MD5LEN);
-		refName[strlen(refPath)+MD5LEN] = '\0';
+		const char* refName = packSourceFileName(refPath, ref);
 		copyItem(refName, name);
 		
-		log.w("checkout item %s", name);
+		log.w("reverse item %s", name);
 		iter = iter->next;
+		dellocate(const_cast<char*>(refName));
 	}
 }
 
 void Demo:: cleanList_(void* p) {
 
-	leaf* lf = static_cast<leaf*>(p);
-	dellocate(const_cast<char*>(lf->getName()));
-	dellocate(const_cast<char*>(lf->getRef()));
-	dellocate(lf);
+	info* inf = static_cast<info*>(p);
+	dellocate(const_cast<char*>(inf->getTag()));
+	dellocate(const_cast<char*>(inf->getRef()));
+	dellocate(inf);
 }
 
-bool leaf::operator>(const leaf& item) {
-
-	if(strcmp(name_, item.getName()) > 0)
-		return true;
-	return false;
+void Demo:: persistenceHandler_(const char* fileName) {
+	
+	log.w("remove item: %s", fileName);
 }
-
-bool leaf::operator == (const leaf& item) {
-
-	if(strcmp(name_, item.getName()) == 0)
-		return true;
-	return false;
-}
-
 
 } //namespace ccv
 /*

@@ -164,14 +164,14 @@ void MemPool::dellocate(void* p) {
 	current->free_list_link = *myFreeList;
 	*myFreeList = current;
 }
-	 
-void* allocate(size_t n) {
 
+void* allocate(size_t n) {
+	
 	return MemPool::sharedMemPool().allocate(n);
 }
 
 void dellocate(void* p) {
-	
+
 	MemPool::sharedMemPool().dellocate(p);
 }
 

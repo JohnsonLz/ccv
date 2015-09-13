@@ -226,6 +226,15 @@ void copyItem(const char* srcFile, const char* dstFile) {
 	fclose(dst);
 }
 
+bool equal(const char* src, const char* dst) {
+
+	if(strlen(src) != strlen(dst))
+		return false;
+	if(strcmp(src, dst) == 0)
+		return true;
+	return false;
+}
+
 void encodeFixed32(char* dst, int value) {
 
 	dst[0] = value & 0xff;

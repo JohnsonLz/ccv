@@ -31,47 +31,87 @@
  **********************************************************************
  */
 
-#ifndef CCV_INS_REPERTORY_H_
-#define CCV_INS_REPERTORY_H_
+#include <string.h>
+#include "ins/repertory.h"
+#include "ins/object.h"
+#include "ins/logcat.h"
+#include "ins/file.h"
+#include "ins/transAction.h"
 
-#include "ins/vet.h"
+using namespace ccv;
 
-namespace ccv {
+int main(int argc, char* argv[]) {
 
-class info;
-
-class Repertory {
-
-	private:
-
-	static void freeMemory_(void* ptr);
-	static void persistenceHandler_(const char* fileName);
-	void parseCommitList_(Vet<info>* vt);
-	Vet<info> commitVet_;
-	Vet<info> branchInfoVet_;
-
-	public:
-	Repertory() {}
-	~Repertory() {
-		branchInfoVet_.freeValueType(freeMemory_);
-		commitVet_.freeValueType(freeMemory_);
+	if(argc < 3) {
+		log.w("Too few arguments in command ccv-branch");
+		log.e("ccv-branch failed");
+		return 0;
+	}
+	if(argc > 4) {
+		log.w("Too more arguments in command ccv-branch");
+		log.e("ccv-branch failed");
+		return 0;
 	}
 
-	void init();
-	void checkRepertory();
-	void parseBranchInfoVet();
-	void parseCommitList();
-	void persistenceBranchInfo();
-	void persistenceCommit();
-	void commit(const char* tag);
-	void reverseCommit(const char* tag);
-	void newBranch(const char* name);
-	void switchBranch(const char* name);
-};
+	Repertory db;
+	db.checkRepertory();
+	if(equal("new", argv[1])) {
+		BeginTransAction();
+		try {
+			db.parseBranchInfoVet();	
+			db.newBranch(argv[2]);
+			if(argc == 4) {
+				if(equal("-s", argv[3])) {
+					db.switchBranch(argv[2]);
+				}
+				else {
+					log.w("wrong argument in command ccv-branch");
+					log.e("ccv-branch failed");
+					return 0;
+				}
+			}
+			db.persistenceBranchInfo();
+		}
+		catch(Code c) {
+			log.e("Create new Branch failed");
+			Rollback();
+			return 0;
+		}
+		EndTransAction();
+		log.v("New branch \"%s\" establish successfully", argv[2]);
+		return 0;
+	}
+	if(equal("switch", argv[1])) {
+		if(argc != 3) {
+			log.w("wrong argument in command ccv-branch");
+			log.e("ccv-branch failed");
+			return 0;
+		}
+		BeginTransAction();
+		try{
+			db.parseBranchInfoVet();
+			db.switchBranch(argv[2]);
+			db.persistenceBranchInfo();
+		}
+		catch(Code c) {
+			log.e("Switch branch failed");
+			Rollback();
+			return 0;
+		}
+		EndTransAction();
+		log.v("Switch to Branch %s successfully", argv[2]);
+		return 0;
+	}
 
-}// namespace ccv
-
-#endif
+	else {
+		log.w("wrong argument in command ccv-branch");
+		log.e("ccv-branch failed");
+		return 0;
+	}
+}
+		
+		
+		
 /*
  **********************************************************************
  ** End                                                              **

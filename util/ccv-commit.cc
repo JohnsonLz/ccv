@@ -31,6 +31,7 @@
  **********************************************************************
  */
 
+#include "ins/file.h"
 #include "ins/logcat.h"
 #include "ins/transAction.h"
 #include "ins/repertory.h"
@@ -49,9 +50,11 @@ int main(int argc, char* argv[]) {
 	db.checkRepertory();
 	BeginTransAction();
 	try {
+		db.parseBranchInfoVet();
 		db.parseCommitList();
 		db.commit(argv[1]);
 		db.persistenceCommit();
+		db.persistenceBranchInfo();
 	}
 	catch(Code c) {
 		log.e("commit failed");

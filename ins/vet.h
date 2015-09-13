@@ -31,47 +31,104 @@
  **********************************************************************
  */
 
-#ifndef CCV_INS_REPERTORY_H_
-#define CCV_INS_REPERTORY_H_
+#ifndef CCV_INS_VET_H_
+#define CCV_INS_VET_H_
 
-#include "ins/vet.h"
+#include <cstdlib>
+#include "mempool.h"
 
 namespace ccv {
 
-class info;
+typedef void(*freeMem)(void*);
 
-class Repertory {
+template<typename ValueType>
+class Vet {
 
 	private:
 
-	static void freeMemory_(void* ptr);
-	static void persistenceHandler_(const char* fileName);
-	void parseCommitList_(Vet<info>* vt);
-	Vet<info> commitVet_;
-	Vet<info> branchInfoVet_;
+	struct innerNode_ {
+		struct innerNode_* next;
+		ValueType* data;
+	};
 
-	public:
-	Repertory() {}
-	~Repertory() {
-		branchInfoVet_.freeValueType(freeMemory_);
-		commitVet_.freeValueType(freeMemory_);
+	struct innerNode_* head_;
+
+	void clean_() {
+
+		innerNode_* curson;
+		curson = head_;
+		while(curson != NULL) {
+			innerNode_* tmp = curson;
+			curson = curson->next;
+			dellocate(tmp);
+		}
 	}
 
-	void init();
-	void checkRepertory();
-	void parseBranchInfoVet();
-	void parseCommitList();
-	void persistenceBranchInfo();
-	void persistenceCommit();
-	void commit(const char* tag);
-	void reverseCommit(const char* tag);
-	void newBranch(const char* name);
-	void switchBranch(const char* name);
+	public:
+	Vet():head_(NULL) {}
+	~Vet() {
+		clean_();
+	}
+
+	void push(ValueType* item) {
+
+		innerNode_* tmp = static_cast<innerNode_*>(allocate(sizeof(innerNode_)));
+		tmp->next = head_;
+		tmp->data = item;
+		head_ = tmp;
+	}
+
+	void append(ValueType* item) {
+
+		innerNode_* tmp = static_cast<innerNode_*>(allocate(sizeof(innerNode_)));
+		tmp->data = item;
+		tmp->next = NULL;
+		if(head_ == NULL) {
+			head_ = tmp;
+		}
+		else {
+			innerNode_* curson = head_;
+			while(curson->next != NULL)
+				curson = head_->next;
+			curson->next = tmp;
+		}
+	}
+	
+	typedef const innerNode_* const_iterator;
+	const_iterator start()const {
+		return head_;
+	}
+	const_iterator end()const {
+		return NULL;
+	}
+
+	ValueType* search(ValueType* item) {
+
+		innerNode_* curson = head_;
+		while(curson != NULL) {
+			if(*(curson->data) == *item)
+				return curson->data;
+			curson = curson->next;
+		}
+		return NULL;
+	}
+	
+	void freeValueType(freeMem fm) {
+
+		innerNode_* curson = head_;
+		while(curson != NULL) {
+			(*fm)(static_cast<void*>(curson->data));
+			curson = curson->next;
+		}
+	}
 };
 
-}// namespace ccv
+
+
+}// namesapce ccv
 
 #endif
+
 /*
  **********************************************************************
  ** End                                                              **

@@ -46,7 +46,6 @@ class Repertory {
 
 	static void freeMemory_(void* ptr);
 	static void persistenceHandler_(const char* fileName);
-	void parseCommitList_(Vet<info>* vt);
 	Vet<info> commitVet_;
 	Vet<info> branchInfoVet_;
 

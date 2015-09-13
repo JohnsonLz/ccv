@@ -31,47 +31,38 @@
  **********************************************************************
  */
 
-#ifndef CCV_INS_REPERTORY_H_
-#define CCV_INS_REPERTORY_H_
+#include "ins/repertory.h"
+#include "ins/logcat.h"
+#include "ins/transAction.h"
+#include "ins/file.h"
 
-#include "ins/vet.h"
+using namespace ccv; 
 
-namespace ccv {
+int main(int argc, char* argv[]) {
 
-class info;
-
-class Repertory {
-
-	private:
-
-	static void freeMemory_(void* ptr);
-	static void persistenceHandler_(const char* fileName);
-	void parseCommitList_(Vet<info>* vt);
-	Vet<info> commitVet_;
-	Vet<info> branchInfoVet_;
-
-	public:
-	Repertory() {}
-	~Repertory() {
-		branchInfoVet_.freeValueType(freeMemory_);
-		commitVet_.freeValueType(freeMemory_);
+	if(argc != 2) {
+		log.w("Wrong arguments in command ccv-reverse");
+		log.e("reverse failed");
+		return 0;
 	}
+	Repertory db;
+	db.checkRepertory();
 
-	void init();
-	void checkRepertory();
-	void parseBranchInfoVet();
-	void parseCommitList();
-	void persistenceBranchInfo();
-	void persistenceCommit();
-	void commit(const char* tag);
-	void reverseCommit(const char* tag);
-	void newBranch(const char* name);
-	void switchBranch(const char* name);
-};
+	BeginTransAction();
+	try {
+		db.parseBranchInfoVet();
+		db.parseCommitList();
+		db.reverseCommit(argv[1]);
+	}
+	catch(Code c) {
+		log.e("reverse failed");
+		Rollback();
+		return 0;
+	}
+	EndTransAction();
+	log.v("reverse %s successfully", argv[1]);
+}
 
-}// namespace ccv
-
-#endif
 /*
  **********************************************************************
  ** End                                                              **

@@ -42,8 +42,8 @@ class MemPool {
 
 	private:
 
-	enum {align = 4};
-	enum {MaxBytes = 64};
+	enum {align = 8};
+	enum {MaxBytes = 128};
 	enum {MemListSize = MaxBytes/align};
 
 	union obj {

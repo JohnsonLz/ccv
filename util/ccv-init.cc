@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
 		try {
 			db.init();
 		}
-		catch(...) {
+		catch(Code c) {
 			Rollback();
 			log.w("Init failed");
 			return 0;

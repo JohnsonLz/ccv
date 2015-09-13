@@ -147,7 +147,7 @@ void Repertory::parseBranchInfoVet() {
 	catch(Code c) {
 		if(c == Empty) {
 			const char* tag = "currentBranch";
-			const char* ref = masterName;
+			const char* ref = "master";
 			int tagLength = strlen(tag);
 			int refLength = strlen(ref);
 
@@ -158,15 +158,6 @@ void Repertory::parseBranchInfoVet() {
 			iftag[tagLength] = '\0';
 			strncpy(ifref, ref, refLength);
 			ifref[refLength] = '\0';
-			new(inf) info(iftag, ifref, true);
-			branchInfoVet_.push(inf);
-
-			tag = "master";
-			tagLength = strlen(tag);
-			iftag = static_cast<char*>(allocate(tagLength + 1));
-			inf = static_cast<info*>(allocate(sizeof(info)));
-			strncpy(iftag, tag, tagLength);
-			iftag[tagLength] = '\0';
 			new(inf) info(iftag, ifref, true);
 			branchInfoVet_.push(inf);
 		}
@@ -186,7 +177,7 @@ void Repertory::persistenceCommit() {
 		throw IOError;
 	}
 
-	const char* currentBranch = unpackTRFileName(inf->getRef());
+	const char* currentBranch = inf->getRef();
 	const char* oldName = packTRFileName(branchPath, currentBranch);
 	const char* newName = packTRFileName(trashPath, currentBranch);
 	moveItem(oldName, newName);
@@ -195,15 +186,9 @@ void Repertory::persistenceCommit() {
 
 	persistenceTRFile(oldName, &commitVet_, persistenceHandler_);
 	dellocate(const_cast<char*>(oldName));
-	dellocate(const_cast<char*>(currentBranch));
 }
 
 void Repertory::parseCommitList() {
-	
-	parseCommitList_(&commitVet_);
-}
-
-void Repertory::parseCommitList_(Vet<info>* vt) {
 	
 	info tmp("currentBranch", NULL, false);
 	info* inf = branchInfoVet_.search(&tmp);
@@ -212,9 +197,9 @@ void Repertory::parseCommitList_(Vet<info>* vt) {
 		throw IOError;
 	}
 
-	const char* fileName = inf->getRef();
+	const char* fileName = packTRFileName(branchPath, inf->getRef());
 	try {
-		parseTRFile(fileName, vt, true);
+		parseTRFile(fileName, &commitVet_, true);
 	}
 	catch(Code c) {
 		if(c == Empty) {}
@@ -222,6 +207,7 @@ void Repertory::parseCommitList_(Vet<info>* vt) {
 			throw c;
 		}
 	}
+	dellocate(const_cast<char*>(fileName));
 }
 
 void Repertory::commit(const char* tag) {
@@ -284,28 +270,18 @@ void Repertory::newBranch(const char* name) {
 		throw Corruption;
 	}
 
-	Vet<info> commitTmp;
-	parseCommitList_(&commitTmp);
-
+	parseCommitList();
 	Vet<info>::const_iterator iter;
-	iter = commitTmp.start();
-	if(iter == NULL) {
-		log.w("current branch contain null commit");
-		log.w("can not create new branch in current stage");
-		commitTmp.freeValueType(freeMemory_);
-		throw Corruption;
-	}
+	iter = commitVet_.start();
 	const char* ref = iter->data->getRef();
 	char* md5 = MD5_file(currentName, MD5LEN);
 	if(strcmp(md5, ref) != 0) {
 		log.w("create branch must be in the laster commit stage");
-		log.w("please reverse to the lastest commit of this branch and then create new branch");
+		log.w("please reverse to the laster commit of this branch and then create new branch");
 		dellocate(md5);
-		commitTmp.freeValueType(freeMemory_);
-		throw Corruption;
+		return Corruption;
 	}
 	dellocate(md5);
-	commitTmp.freeValueType(freeMemory_);
 
 	const char* newBranchName = packTRFileName(branchPath, name);
 	copyItem(masterName, newBranchName);
@@ -313,10 +289,10 @@ void Repertory::newBranch(const char* name) {
 
 	inf = static_cast<info*>(allocate(sizeof(info)));
 	int nameLength = strlen(name);
-	char* tag = static_cast<char*>(allocate(nameLength + 1));
-	strncpy(tag, name, nameLength);
+	char* tag = static_cast<char*>(allocate(nameLength + 1);
+	strncpy(tag, name);
 	tag[nameLength] = '\0';
-	new(inf) info(tag, newBranchName, true);
+	new(inf) info(tag, newBranchName);
 	branchInfoVet_.push(inf);
 }
 
@@ -326,11 +302,11 @@ void Repertory::switchBranch(const char* name) {
 	info* inf = branchInfoVet_.search(&tmp);
 	if(inf == NULL) {
 		log.w("Branch: %s doesn't exist");
-		throw NotFound;
+		return NotFound;
 	}
 
 	int length = strlen(inf->getRef());
-	char* ref = static_cast<char*>(allocate(length + 1));
+	const char* ref = static_cast<char*>(allocate(length + 1));
 	strncpy(ref, inf->getRef(), length);
 	ref[length] = '\0';
 	tmp.setTag("currentBranch");
@@ -338,12 +314,6 @@ void Repertory::switchBranch(const char* name) {
 	dellocate(const_cast<char*>(inf->getRef()));
 	inf->setRef(ref);
 
-	parseCommitList();
-	Vet<info>::const_iterator iter;
-	iter = commitVet_.start();
-	const char* currentCommit = iter->data->getTag();
-	reverseCommit(currentCommit);
-	log.v("reverse branch: %s lastest commit stage", name);
 }
 
 void Repertory::freeMemory_(void* p) {

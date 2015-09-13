@@ -36,6 +36,8 @@
 #include "ins/repertory.h"
 #include "ins/transAction.h"
 #include "ins/logcat.h"
+#include "ins/file.h"
+
 using namespace ccv;
 
 int main(int argc, char* argv[]) {
@@ -47,10 +49,10 @@ int main(int argc, char* argv[]) {
 	
 	Repertory db;
 	db.checkRepertory();
-	if((strlen(argv[1]) == 1) && (strncmp(argv[1], ".", 1) == 0)) {
+	if(strncmp(argv[1], "-a", 2) == 0) {
 		Demo demo;
 		try {
-			demo.parseStructure(".ccv/current"); 
+			demo.parseStructure(currentName); 
 		}
 		catch(Code c) {
 			log.w("parse structure failed");

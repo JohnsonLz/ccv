@@ -46,8 +46,24 @@ enum Code {
 	Empty = 5
 };
 
-
 const int bufferSize = 255;
+const char currentName[] = ".ccv/current.tr";
+const char masterName[] = ".ccv/branch/master.tr";
+const char branchInfoName[] = ".ccv/branch/branchInfo.tr";
+const char demoPath[] = ".ccv/demo/";
+const char demoName[] = ".ccv/demo";
+const char refPath[] = ".ccv/ref/";
+const char refName[] = ".ccv/ref";
+const char trashPath[] = ".ccv/trashTmp/";
+const char trashName[] = ".ccv/trashTmp";
+const char logName[] = ".ccv/log.tr";
+const char stagePath[] = ".ccv/stage/";
+const char stageName[] = ".ccv/stage";
+const char branchPath[] = ".ccv/branch/";
+const char branchName[] = ".ccv/branch";
+
+
+
 void createDir(const char* dir);
 void createPath(const char* filePath);
 void accessDir(const char* directory);
@@ -58,6 +74,7 @@ void removeItem(const char* fileName, bool isDir = false);
 void removeAllInDir(const char* directory);
 void copyItem(const char* srcFile, const char* dstFile);
 
+bool equal(const char* src, const char* dst);
 void encodeFixed32(char* dst, int value);
 int decodeFixed32(const char* ptr);
 

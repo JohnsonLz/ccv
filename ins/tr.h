@@ -31,47 +31,63 @@
  **********************************************************************
  */
 
-#ifndef CCV_INS_REPERTORY_H_
-#define CCV_INS_REPERTORY_H_
+#ifndef CCV_INS_TR_H_
+#define CCV_INS_TR_H_
 
-#include "ins/vet.h"
+#include "list.h"
+#include "vet.h"
 
 namespace ccv {
 
-class info;
+typedef void(*Handler)(const char*);
 
-class Repertory {
+class info {
 
 	private:
-
-	static void freeMemory_(void* ptr);
-	static void persistenceHandler_(const char* fileName);
-	void parseCommitList_(Vet<info>* vt);
-	Vet<info> commitVet_;
-	Vet<info> branchInfoVet_;
+	const char* tag_;
+	const char* ref_;
+	bool persistence_;
 
 	public:
-	Repertory() {}
-	~Repertory() {
-		branchInfoVet_.freeValueType(freeMemory_);
-		commitVet_.freeValueType(freeMemory_);
+	info(const char* tag, const char* ref, bool p)
+		:tag_(tag), ref_(ref), persistence_(p){}
+	~info(){};
+
+	const char* getRef() const {
+		return ref_;
+	}
+	const char* getTag() const {
+		return tag_;
+	}
+	bool Persistence() const {
+		return persistence_;
+	}
+	void setPersistence(bool p) {
+		persistence_ = p;
+	}
+	void setRef(const char* ref) {
+		ref_ = ref;
+	}
+	void setTag(const char* tag) {
+		tag_ = tag;
 	}
 
-	void init();
-	void checkRepertory();
-	void parseBranchInfoVet();
-	void parseCommitList();
-	void persistenceBranchInfo();
-	void persistenceCommit();
-	void commit(const char* tag);
-	void reverseCommit(const char* tag);
-	void newBranch(const char* name);
-	void switchBranch(const char* name);
+	bool operator > (const info& item);
+	bool operator == (const info& item);
 };
 
-}// namespace ccv
+const char* packTRFileName(const char* path, const char* name);
+const char* unpackTRFileName(const char* TRFileName);
+const char* packSourceFileName(const char* path, const char* name);
+void parseTRFile(const char* flieName, List<info>* ls, bool persistence);
+void parseTRFile(const char* fileName, Vet<info>* vt, bool persistence);
+void persistenceTRFile(const char* fileName, List<info>* ls, Handler hd);
+void persistenceTRFile(const char* fileName, Vet<info>* vt, Handler hd);
+
+}//namesapce ccv
 
 #endif
+
 /*
  **********************************************************************
  ** End                                                              **

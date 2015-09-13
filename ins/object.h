@@ -35,52 +35,17 @@
 #define CCV_INS_OBJECT_H_
 
 #include "list.h"
-#include "file.h"
-
 
 namespace ccv {
 
-class leaf {
-
-	private:
-		const char* ref_;
-		const char* name_;
-		bool persistence_;
-	
-	public:
-		leaf(char* ref, char* name):ref_(ref), name_(name), persistence_(false) {}
-		~leaf(){}
-
-		const char* getRef() const {
-			return ref_;
-		}
-		const char* getName() const {
-			return name_;
-		}
-		bool persistence() {
-			return persistence_;
-		}
-		void setRef(const char* ref) {
-			ref_ = ref;
-		}
-		void setName(const char* name) {
-			name_ = name;
-		}
-		void setPersistence() {
-			persistence_ = true;
-		}
-		bool operator >(const leaf& item);
-		bool operator == (const leaf& item);
-
-};
-		
+class info;
 
 class Demo {
 
 	private:
-		List<leaf> fileList_;
-		
+		List<info> fileList_;		
 		static void cleanList_(void* p);
+		static void persistenceHandler_(const char* fileName);
 		
 	public:
 		Demo() {}
@@ -92,7 +57,7 @@ class Demo {
 		void persistenceRef();	
 		void persistenceDemo();
 		void parseStructure(const char* fileName);
-		void checkoutDemo(const char* fileName);
+		void reverseDemo(const char* fileName);
 
 };
 
