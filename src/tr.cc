@@ -336,6 +336,134 @@ const char* packSourceFileName(const char* path, const char* name) {
 	return sourceName;
 }
 
+const char* unpackSourceFileName(const char* fileName) {
+
+	int length = strlen(fileName);
+	int i= 0;
+	int position = -1;
+	while(i < length) {
+		if(fileName[i] == '/')
+			position = i;
+		i++;
+	}
+	char* name = static_cast<char*>(allocate(length - position));
+	strcpy(name, fileName+position+1);
+	name[length-position-1] = '\0';
+	return name;
+}
+
+const char* packBranchInfo(const char* father, const char* stage) {
+
+	int fatherLength = strlen(father);
+	int stageLength = strlen(stage);
+	int totalLength = fatherLength + stageLength + 2;
+	char* branchInfo = static_cast<char*>(allocate(totalLength));
+	strncpy(branchInfo, father, fatherLength);
+	branchInfo[fatherLength] = '/';
+	strncpy(branchInfo+fatherLength+1, stage, stageLength);
+	branchInfo[totalLength - 1] ='\0';
+	return branchInfo;
+}
+
+const char* getFatherBranch(const char* branchName) {
+
+	int length = strlen(branchName); 
+	int position = 0;
+	while(position < length) {
+		if(branchName[position] == '/')
+			break;
+		position ++;
+	}
+	char* father = static_cast<char*>(allocate(position + 1));
+	strncpy(father, branchName, position);
+	father[position] = '\0';
+	return father;
+}
+
+const char* getStageBranch(const char* branchName) {
+
+	int length = strlen(branchName);
+	int position = 0;
+	while(position < length) {
+		if(branchName[position] == '/')
+			break;
+		position ++;
+	}
+	char* stage = static_cast<char*>(allocate(length - position));
+	strncpy(stage, branchName+position+1, length-position -1);
+	stage[length - position -1] = '\0';
+	return stage;
+}
+
+const char* handleCorruptionName(const char* name) {
+
+	int length = strlen(name);
+	int position1 = 0;
+	int position2 = 0;
+	int position3 = 0;
+	int i = 0;
+
+	while(i < length) {
+		if(name[i] == '(') {
+			position1 = i;
+		}
+		if(name[i] == ')') {
+			position2 = i;
+			break;
+		}
+		if(name[i] == '.') {
+			position3 = i;
+			break;
+		}
+		i++;
+	}
+	int mark = 0;
+	if(position1 && position2) {
+		i = position1+1;
+		while(i<position2) {
+			mark = mark*10 + (name[i] - 16);
+		}
+		mark++;
+		int power = 1;
+		while(mark/power) {
+			length++;
+		}
+		char buf[bufferSize];
+		strncpy(buf, name, position1+1);
+		int lengthtmp = position1+1;
+		while(power) {
+			int tmp = mark/power;
+			buf[lengthtmp] = tmp + 16;
+			mark = mark - tmp*power;
+			power/= 10;
+			lengthtmp++;
+		}
+		strcpy(buf+lengthtmp, name+position2);
+		lengthtmp = strlen(buf);
+		char* result = static_cast<char*>(allocate(lengthtmp + 1));
+		strncpy(result, buf, lengthtmp);
+		result[lengthtmp] = '\0';
+		return result;
+	}
+	else if(position3) {
+		char* result = static_cast<char*>(allocate(length + 4));
+		strncpy(result, name, position3);
+		strcpy(result+position3, "(1)");
+		strcpy(result+position3+3, name+position3);
+		result[length+3] = '\0';
+		return result;
+	}
+	else {
+		char* result = static_cast<char*>(allocate(length + 4));
+		strncpy(result, name, length);
+		strcpy(result+length, "(1)");
+		result[length+3] = '\0';
+		return result;
+	}
+}
+
+
+
 bool info::operator > (const info& item) {
 		
 	if(strcmp(tag_, item.getTag()) > 0)

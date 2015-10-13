@@ -34,8 +34,8 @@
 #ifndef CCV_INS_TR_H_
 #define CCV_INS_TR_H_
 
-#include "list.h"
-#include "vet.h"
+#include "ins/list.h"
+#include "ins/vet.h"
 
 namespace ccv {
 
@@ -79,6 +79,12 @@ class info {
 const char* packTRFileName(const char* path, const char* name);
 const char* unpackTRFileName(const char* TRFileName);
 const char* packSourceFileName(const char* path, const char* name);
+const char* unpackSourceFileName(const char* fileName);
+const char* packBranchInfo(const char* father, const char* stage);
+const char* getFatherBranch(const char* branchName);
+const char* getStageBranch(const char* branchName);
+const char* handleCorruptionName(const char* name);
+
 void parseTRFile(const char* flieName, List<info>* ls, bool persistence);
 void parseTRFile(const char* fileName, Vet<info>* vt, bool persistence);
 void persistenceTRFile(const char* fileName, List<info>* ls, Handler hd);

@@ -41,6 +41,7 @@
 
 #include "ins/object.h"
 #include "ins/list.h"
+#include "ins/vet.h"
 #include "ins/md5.h"
 #include "ins/tr.h"
 #include "ins/logcat.h"

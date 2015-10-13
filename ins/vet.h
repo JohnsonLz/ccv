@@ -52,6 +52,7 @@ class Vet {
 	};
 
 	struct innerNode_* head_;
+	struct innerNode_* tail_;
 
 	void clean_() {
 
@@ -62,10 +63,12 @@ class Vet {
 			curson = curson->next;
 			dellocate(tmp);
 		}
+		head_ = NULL;
+		tail_ = NULL;
 	}
 
 	public:
-	Vet():head_(NULL) {}
+	Vet():head_(NULL), tail_(NULL) {}
 	~Vet() {
 		clean_();
 	}
@@ -75,6 +78,9 @@ class Vet {
 		innerNode_* tmp = static_cast<innerNode_*>(allocate(sizeof(innerNode_)));
 		tmp->next = head_;
 		tmp->data = item;
+		if(head_ == NULL) {
+			tail_ = tmp;
+		}
 		head_ = tmp;
 	}
 
@@ -83,14 +89,13 @@ class Vet {
 		innerNode_* tmp = static_cast<innerNode_*>(allocate(sizeof(innerNode_)));
 		tmp->data = item;
 		tmp->next = NULL;
-		if(head_ == NULL) {
+		if(tail_ == NULL) {
 			head_ = tmp;
+			tail_ = tmp;
 		}
 		else {
-			innerNode_* curson = head_;
-			while(curson->next != NULL)
-				curson = head_->next;
-			curson->next = tmp;
+			tail_->next = tmp;
+			tail_ = tmp;
 		}
 	}
 	
@@ -120,10 +125,97 @@ class Vet {
 			(*fm)(static_cast<void*>(curson->data));
 			curson = curson->next;
 		}
+		clean_();
 	}
 };
 
+template<typename ValueType>
+class Vet<ValueType*> {
 
+	private:
+
+	struct innerNode_ {
+		struct innerNode_* next;
+		ValueType* data;
+	};
+
+	struct innerNode_* head_;
+	struct innerNode_* tail_;
+
+	void clean_() {
+
+		innerNode_* curson;
+		curson = head_;
+		while(curson != NULL) {
+			innerNode_* tmp = curson;
+			curson = curson->next;
+			dellocate(tmp);
+		}
+		head_ = NULL;
+		tail_ = NULL;
+	}
+
+	public:
+	Vet():head_(NULL), tail_(NULL) {}
+	~Vet() {
+		clean_();
+	}
+
+	void push(ValueType* item) {
+
+		innerNode_* tmp = static_cast<innerNode_*>(allocate(sizeof(innerNode_)));
+		tmp->next = head_;
+		tmp->data = item;
+		if(head_ == NULL) {
+			tail_ = tmp;
+		}
+		head_ = tmp;
+	}
+
+	void append(ValueType* item) {
+
+		innerNode_* tmp = static_cast<innerNode_*>(allocate(sizeof(innerNode_)));
+		tmp->data = item;
+		tmp->next = NULL;
+		if(tail_ == NULL) {
+			head_ = tmp;
+			tail_ = tmp;
+		}
+		else {
+			tail_->next = tmp;
+			tail_ = tmp;
+		}
+	}
+	
+	typedef const innerNode_* const_iterator;
+	const_iterator start()const {
+		return head_;
+	}
+	const_iterator end()const {
+		return NULL;
+	}
+
+	ValueType* search(ValueType* item) {
+
+		innerNode_* curson = head_;
+		while(curson != NULL) {
+			if(*(curson->data) == *item)
+				return curson->data;
+			curson = curson->next;
+		}
+		return NULL;
+	}
+	
+	void freeValueType(freeMem fm) {
+
+		innerNode_* curson = head_;
+		while(curson != NULL) {
+			(*fm)(static_cast<void*>(curson->data));
+			curson = curson->next;
+		}
+		clean_();
+	}
+};
 
 }// namesapce ccv
 

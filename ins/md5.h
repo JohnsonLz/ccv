@@ -40,6 +40,8 @@
 #ifndef CCV_INS_MD5_H_
 #define CCV_INS_MD5_H_
 
+#include "ins/vet.h"
+
 namespace ccv {
 
 /* typedef a 32 bit type */
@@ -68,11 +70,13 @@ class MD5 {
 	
 	void MD5Update (const unsigned char *inBuf, unsigned int inLen);
 	void MD5Final ();
-	char* MD5Signature (const char* file_signature, int md5_len);
+	char* MD5SignatureFile (const char* file_signature, int md5_len);
+	char* MD5SignatureLines (Vet<char*>* lines, int md5_len);
 
 };
 
 char *MD5_file (const char *path, int md5_len);
+char *MD5_lines (Vet<char*>* lines, int md5_len);
 
 } // namsepace ccv
 

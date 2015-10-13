@@ -34,11 +34,12 @@
 #ifndef CCV_INS_OBJECT_H_
 #define CCV_INS_OBJECT_H_
 
-#include "list.h"
+#include "ins/list.h"
 
 namespace ccv {
 
 class info;
+
 
 class Demo {
 

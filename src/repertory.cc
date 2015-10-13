@@ -37,11 +37,13 @@
 
 #include "ins/file.h"
 #include "ins/list.h"
+#include "ins/vet.h"
 #include "ins/repertory.h"
 #include "ins/logcat.h"
 #include "ins/mempool.h"
 #include "ins/md5.h"
 #include "ins/tr.h"
+#include "ins/diff.h"
 #include "ins/object.h"
 #include "ins/transAction.h"
 
@@ -102,6 +104,13 @@ void Repertory::init() {
 		throw IOError;
 	}
 	fclose(fp);
+
+	fp = fopen(emptyName, "wb+");
+	if(fp == NULL) {
+		throw IOError;
+	}
+	fclose(fp);
+
 	log.v("create %s", branchInfoName);
 	AddTransAction(branchInfoName);
 
@@ -277,7 +286,10 @@ void Repertory::reverseCommit(const char* tag) {
 
 void Repertory::newBranch(const char* name) {
 
-	info tmp(name, NULL, false);
+	char buf[bufferSize];
+	strcpy(buf, "feature-");
+	strcpy(buf+strlen("feature-"), name);
+	info tmp(buf, NULL, false);
 	info* inf = branchInfoVet_.search(&tmp);
 	if(inf != NULL) {
 		log.w("Branch %s has esisted", name);
@@ -305,36 +317,53 @@ void Repertory::newBranch(const char* name) {
 		throw Corruption;
 	}
 	dellocate(md5);
-	commitTmp.freeValueType(freeMemory_);
 
-	const char* newBranchName = packTRFileName(branchPath, name);
-	copyItem(masterName, newBranchName);
-	AddTransAction(newBranchName);
+	const char* newBranchName = packTRFileName(branchPath, buf);
+	tmp.setTag("currentBranch");
+	inf = branchInfoVet_.search(&tmp);
+	const char* currentBranchName = unpackTRFileName(inf->getRef());
+	copyItem(inf->getRef(), newBranchName);
+	AddTransAction(inf->getRef());
+	dellocate(const_cast<char*>(newBranchName));
 
 	inf = static_cast<info*>(allocate(sizeof(info)));
-	int nameLength = strlen(name);
+	int nameLength = strlen(buf);
 	char* tag = static_cast<char*>(allocate(nameLength + 1));
-	strncpy(tag, name, nameLength);
+	strncpy(tag, buf, nameLength);
 	tag[nameLength] = '\0';
-	new(inf) info(tag, newBranchName, true);
+	const char* stage = iter->data->getTag();
+	const char* ancestorBranchInfo = packBranchInfo(currentBranchName, stage);
+	dellocate(const_cast<char*>(currentBranchName));
+	new(inf) info(tag, ancestorBranchInfo, true);
 	branchInfoVet_.push(inf);
+	commitTmp.freeValueType(freeMemory_);
 }
 
 void Repertory::switchBranch(const char* name) {
 
-	info tmp(name, NULL, false);
+	char buf[bufferSize];
+	if(equal(name, "master")) {
+		strcpy(buf, "master");
+	}
+	else {
+		strcpy(buf, "feature-");
+		strcpy(buf+strlen("feature-"), name);
+	}
+
+	info tmp(buf, NULL, false);
 	info* inf = branchInfoVet_.search(&tmp);
 	if(inf == NULL) {
-		log.w("Branch: %s doesn't exist");
+		log.w("Branch: %s doesn't exist", name);
 		throw NotFound;
 	}
 
-	int length = strlen(inf->getRef());
-	char* ref = static_cast<char*>(allocate(length + 1));
-	strncpy(ref, inf->getRef(), length);
-	ref[length] = '\0';
 	tmp.setTag("currentBranch");
 	inf = branchInfoVet_.search(&tmp);
+	const char* ref = packTRFileName(branchPath, buf);
+	if(equal(ref, inf->getRef())) {
+		log.w("Branch %s is currentBranch, don't need switch", name);
+		return ;
+	}
 	dellocate(const_cast<char*>(inf->getRef()));
 	inf->setRef(ref);
 
@@ -345,6 +374,301 @@ void Repertory::switchBranch(const char* name) {
 	reverseCommit(currentCommit);
 	log.v("reverse branch: %s lastest commit stage", name);
 }
+
+void Repertory::merge(const char* branchName) {
+
+	info tmp("currentBranch", NULL, false);
+	info* inf = branchInfoVet_.search(&tmp);
+	if(inf == NULL) {
+		log.w("Branchinfo has been destory");
+		throw NotFound;
+	}
+
+	const char* tag = unpackTRFileName(inf->getRef());
+	tmp.setTag(tag);
+	inf = branchInfoVet_.search(&tmp);
+//	dellocate(const_cast<char*>(tag));
+
+	const char* fatherBranch = getFatherBranch(inf->getRef());
+	if(!equal(branchName, fatherBranch)) {
+		log.w("branch: %s is not the father branch of currentBranch", branchName); 
+		log.w("only allow to merger to father branch");
+		dellocate(const_cast<char*>(fatherBranch));
+		throw Corruption;
+	}
+
+	List<info>ancestorList;
+	List<info>featureList;
+	List<info>fatherList;
+	Vet<info>commitVet;
+	const char* fatherBranchRef = packTRFileName(branchPath, fatherBranch);
+	dellocate(const_cast<char*>(fatherBranch));
+	parseTRFile(currentName, &featureList, false);
+	parseTRFile(fatherBranchRef, &commitVet, false);
+	dellocate(const_cast<char*>(fatherBranchRef));
+
+	Vet<info>::const_iterator iter;
+	iter = commitVet.start();
+	const char* fatherStageRef = packTRFileName(demoPath,iter->data->getRef());
+	parseTRFile(fatherStageRef, &fatherList, false);
+	const char* ancestor = getStageBranch(inf->getRef());
+	tmp.setTag(ancestor);
+	inf = commitVet.search(&tmp);
+	const char* ancestorStageRef = packTRFileName(demoPath, inf->getRef());
+	parseTRFile(ancestorStageRef, &ancestorList, false);
+	dellocate(const_cast<char*>(ancestor));
+	dellocate(const_cast<char*>(fatherStageRef));
+	dellocate(const_cast<char*>(ancestorStageRef));
+	commitVet.freeValueType(freeMemory_);
+
+	Vet<info>conflictVet;
+	List<info>::const_iterator liter;
+	liter = fatherList.start();
+	while(liter != fatherList.end()) {
+		info* ancestorSearch;
+		info* featureSearch;
+		info* insertInfo;
+
+		info* currentSearch = liter->data;
+		info tmp(currentSearch->getTag(), NULL, false);
+		ancestorSearch = ancestorList.search(&tmp);
+		featureSearch = featureList.search(&tmp);
+		if(ancestorSearch == NULL) {
+			if(featureSearch == NULL) {
+				const char* dstFile = packSourceFileName(refPath, currentSearch->getRef());
+				createPath(currentSearch->getTag());
+				copyItem(dstFile, currentSearch->getTag());
+				AddTransAction(currentSearch->getTag());
+				dellocate(const_cast<char*>(dstFile));
+				liter = liter->next;
+				continue;
+			}
+			else {
+				if(equal(currentSearch->getRef(), featureSearch->getRef())) {
+					featureSearch->setPersistence(true);
+					liter = liter->next;
+					continue;
+				}
+				else {
+					//TODO::conflict;
+					const char* dstFile = packSourceFileName(refPath, currentSearch->getRef());
+					insertInfo = static_cast<info*>(allocate(sizeof(info)));
+					int tagLength = strlen(currentSearch->getTag());
+					char* srcFile = static_cast<char*>(allocate(tagLength+1));
+					strncpy(srcFile, currentSearch->getTag(), tagLength);
+					srcFile[tagLength] = '\0';
+					new(insertInfo) info(srcFile, dstFile, false);
+					conflictVet.push(insertInfo);
+					featureSearch->setPersistence(true);
+					liter = liter->next;
+					continue;
+				}
+			}
+		}
+		else {
+			if(featureSearch == NULL) {
+				if(equal(currentSearch->getRef(), ancestorSearch->getRef())) {
+					//const char* dstFile = packTRFileName(refPath, currentSearch->getRef());
+					//createPath(currentSearch->getTag());
+					//copyItem(dstFile, currentSearch->getTag());
+					//AddTransAction(currentSearch->getTag());
+					//dellocate(const_cast<char*>(dstFile));
+					liter = liter->next;
+					continue;
+				}
+				else {
+					//TODO::
+					const char* dstFile = packSourceFileName(refPath, currentSearch->getRef());
+					insertInfo = static_cast<info*>(allocate(sizeof(info)));
+					int tagLength = strlen(currentSearch->getTag());
+					char* srcFile = static_cast<char*>(allocate(tagLength+1));
+					strncpy(srcFile, currentSearch->getTag(), tagLength);
+					srcFile[tagLength] = '\0';
+					createPath(srcFile);
+					copyItem(dstFile, srcFile);
+					new(insertInfo) info(srcFile, dstFile, true);
+					conflictVet.push(insertInfo);
+					liter = liter->next;
+					continue;
+				}
+			}
+			else {
+				if(equal(currentSearch->getRef(), featureSearch->getRef())) {
+					featureSearch->setPersistence(true);
+					liter = liter->next;
+					continue;
+				}
+				else {
+					if(equal(currentSearch->getRef(), ancestorSearch->getRef())) {
+						featureSearch->setPersistence(true);
+						liter = liter->next;
+						continue;
+					}
+					if(equal(featureSearch->getRef(), ancestorSearch->getRef())) {
+						const char* name = unpackSourceFileName(featureSearch->getRef());
+						const char* trashName = packSourceFileName(trashPath, name);
+						dellocate(const_cast<char*>(name));
+						moveItem(currentSearch->getTag(), trashName);
+						MoveTransAction(currentSearch->getTag(), trashName);
+						dellocate(const_cast<char*>(name));
+						createPath(currentSearch->getTag());
+						const char* refName = packSourceFileName(refPath, currentSearch->getRef());
+						copyItem(refName, currentSearch->getTag());
+						AddTransAction(currentSearch->getTag());
+						dellocate(const_cast<char*>(refName));
+						featureSearch->setPersistence(true);
+						liter = liter->next;
+						continue;
+					}
+					else {
+						const char* dstFile = packSourceFileName(refPath, currentSearch->getRef());
+						insertInfo = static_cast<info*>(allocate(sizeof(info)));
+						int tagLength = strlen(currentSearch->getTag());
+						char* srcFile = static_cast<char*>(allocate(tagLength+1));
+						strncpy(srcFile, currentSearch->getTag(), tagLength);
+						srcFile[tagLength] = '\0';
+						new(insertInfo) info(srcFile, dstFile, false);
+						conflictVet.push(insertInfo);
+						featureSearch->setPersistence(true);
+						liter = liter->next;
+						continue;
+
+					}
+				}
+			}
+		}
+	}
+
+	liter = featureList.start();
+	while(liter != featureList.end()) {
+		info* currentSearch;
+		info* ancestorSearch;
+		info* insertInfo;
+
+		currentSearch = liter->data;
+		info tmp(currentSearch->getTag(), NULL, false);
+		ancestorSearch = ancestorList.search(&tmp);
+		if(currentSearch->Persistence()) {
+			liter = liter->next;
+			continue;
+		}
+		if(ancestorSearch == NULL) {
+			liter = liter->next;
+			continue;
+		}
+		else {
+			if(equal(ancestorSearch->getRef(), currentSearch->getRef())) {
+				const char* name = unpackSourceFileName(currentSearch->getTag());
+				const char* trashName = packSourceFileName(trashPath, name);
+				dellocate(const_cast<char*>(name));
+				moveItem(currentSearch->getTag(), trashName);
+				MoveTransAction(currentSearch->getTag(), trashName);
+				dellocate(const_cast<char*>(trashName));
+				liter = liter->next;
+				continue;
+			}
+			else {
+				const char* dstFile = packSourceFileName(refPath, currentSearch->getRef());
+				insertInfo = static_cast<info*>(allocate(sizeof(info)));
+				int tagLength = strlen(currentSearch->getTag());
+				char* srcFile = static_cast<char*>(allocate(tagLength+1));
+				strncpy(srcFile, currentSearch->getTag(), tagLength);
+				srcFile[tagLength] = '\0';
+				new(insertInfo) info(srcFile, dstFile, true);
+				conflictVet.push(insertInfo);
+				liter = liter->next;
+				continue;
+			}
+		}
+	}
+
+	featureList.freeValueType(freeMemory_);
+	fatherList.freeValueType(freeMemory_);
+	ancestorList.freeValueType(freeMemory_);
+
+	Vet<info>::const_iterator viter;
+	viter = conflictVet.start();
+	if(viter == NULL) {
+		log.v("merge successfully\n");
+		log.v("command ccv-merge commit [commitName] to finish this merge");
+		log.v("command ccv-reverse [commitName] to cancel this merge");
+		return;
+	}
+	log.w("Conflict item");
+	log.w("        Type        Item\n");
+	while(viter != conflictVet.end()) {
+		info* tmp = viter->data;
+		if(tmp->Persistence()) {
+			log.i("         RM       %s", tmp->getTag());	
+		}
+		else {
+			Diff di;
+			di.diffItem(tmp->getTag(), tmp->getRef(), tag+8, branchName);
+			log.i("         CG       %s", tmp->getTag());
+		}
+		viter = viter->next;
+	}
+
+	dellocate(const_cast<char*>(tag));
+	conflictVet.freeValueType(freeMemory_);
+	log.w("Type RM : remove conflict, decide remove this item or not");
+	log.w("Type CG : change conflict, confliction was marked in the item");
+	log.v("Handle the conflict first ");
+	log.v("command ccv-merge commit [commitName] to finish this merge");
+	log.v("command ccv-reverse [commitName] to cancel this merge");
+}
+
+void Repertory::mergeCommit(const char* tag) {
+
+	info tmp("currentBranch", NULL, false);
+	info* inf = branchInfoVet_.search(&tmp);
+	if(inf == NULL) {
+		log.w("Branchinfo has been destory");
+		throw NotFound;
+	}
+
+	const char* branchName = unpackTRFileName(inf->getRef());
+	tmp.setTag(branchName);
+	inf = branchInfoVet_.search(&tmp);
+	dellocate(const_cast<char*>(branchName));
+
+	const char* fatherName = getFatherBranch(inf->getRef());
+	const char* fatherBranchRef = packTRFileName(branchPath, fatherName);
+	tmp.setTag(fatherName);
+	inf = branchInfoVet_.search(&tmp);
+	if(inf == NULL) {
+		log.w("Branch: %s doesn't exist", fatherName);
+		throw NotFound;
+	}
+
+	dellocate(const_cast<char*>(fatherName));
+	tmp.setTag("currentBranch");
+	inf = branchInfoVet_.search(&tmp);
+	dellocate(const_cast<char*>(inf->getRef()));
+	inf->setRef(fatherBranchRef);
+
+	parseCommitList();
+	Demo demo;
+	try {
+		demo.parseStructure(currentName);
+		demo.travel(".");
+		demo.persistenceDemo();
+	}
+	catch(Code c) {
+		log.w("Add failed");
+		throw Corruption;
+	}
+
+	try {
+		commit(tag);
+		persistenceCommit();
+	}
+	catch(Code c) {
+		log.w("commit failed");
+		throw Corruption;
+	}
+}
+
 
 void Repertory::freeMemory_(void* p) {
 

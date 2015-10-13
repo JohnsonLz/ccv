@@ -61,6 +61,7 @@ const char stagePath[] = ".ccv/stage/";
 const char stageName[] = ".ccv/stage";
 const char branchPath[] = ".ccv/branch/";
 const char branchName[] = ".ccv/branch";
+const char emptyName[] = ".ccv/ref/e4c23762ed2823a27e62a64b95c024e7";
 
 
 

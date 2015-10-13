@@ -67,6 +67,8 @@ class Repertory {
 	void reverseCommit(const char* tag);
 	void newBranch(const char* name);
 	void switchBranch(const char* name);
+	void merge(const char* branchName);
+	void mergeCommit(const char* tag);
 };
 
 }// namespace ccv

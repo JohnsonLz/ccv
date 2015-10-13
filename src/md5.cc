@@ -36,6 +36,8 @@
 
 #include "ins/md5.h"
 #include "ins/mempool.h"
+#include "ins/file.h"
+#include "ins/vet.h"
 
 namespace ccv {
 	  
@@ -270,7 +272,7 @@ void MD5::Transform (UINT4 *buf, UINT4 *in)
   buf[3] += d;  
 }
 
-char* MD5::MD5Signature (const char *path, int md5_len)  
+char* MD5::MD5SignatureFile (const char *path, int md5_len)  
 {  
     FILE *fp = fopen (path, "rb");  
     int bytes;  
@@ -323,10 +325,65 @@ char* MD5::MD5Signature (const char *path, int md5_len)
     return file_md5;  
 }   
 
+
+char* MD5::MD5SignatureLines(Vet<char*>* lines, int md5_len) {
+
+    int bytes;  
+    unsigned char data[bufferSize];  
+    char *file_md5;  
+    int i;  
+  
+    MD5Init ();
+	Vet<char*>::const_iterator iter;
+	iter = lines->start();
+	while(iter != lines->end()) {   
+        MD5Update (reinterpret_cast<unsigned char*>(iter->data), strlen(iter->data));  
+		iter = iter->next;
+	}  
+    MD5Final ();  
+      
+    file_md5 = static_cast<char *>(allocate((md5_len + 1) * sizeof(char)));  
+    if(file_md5 == NULL)  
+    {  
+        fprintf(stderr, "malloc failed.\n");  
+        return NULL;  
+    }  
+    memset(file_md5, 0, (md5_len + 1));  
+      
+    if(md5_len == 16)  
+    {  
+        for(i=4; i<12; i++)  
+        {  
+            sprintf(&file_md5[(i-4)*2], "%02x", mdContext_.digest[i]);  
+        }  
+    }  
+    else if(md5_len == 32)  
+    {  
+        for(i=0; i<16; i++)  
+        {  
+            sprintf(&file_md5[i*2], "%02x", mdContext_.digest[i]);  
+        }  
+    }  
+    else  
+    {      
+        dellocate(file_md5);  
+        return NULL;  
+    }  
+
+    return file_md5;  
+}   
+
+
 char* MD5_file(const char* path, int length) {
 
 	MD5 md5;
-	return md5.MD5Signature(path, length);
+	return md5.MD5SignatureFile(path, length);
+}
+
+char* MD5_lines(Vet<char*>* lines, int md5_len) {
+
+	MD5 md5;
+	return md5.MD5SignatureLines(lines, md5_len);
 }
 
 }// namespace ccv

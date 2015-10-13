@@ -3,20 +3,20 @@
 #Project directory
 PROJECT_DIR := .
 SRC_DIR := $(PROJECT_DIR)/src
-LIB_DIR := $(PROJECT_DIR)/lib
+LIB_DIR := $(PROJECT_DIR)/json
 OBJ_DIR := $(PROJECT_DIR)/obj
 UTIL_DIR := $(PROJECT_DIR)/util
 
 #Compiler paraments
-CPPFLAGS := -g -I$(PROJECT_DIR)
-LDFLAG := -L$(LIB_DIR)
+CPPFLAGS := -g  -I$(PROJECT_DIR)
+LDFLAG := -L$(LIB_DIR) -ljson -static
 
 #Sources and objs
 SOURCES := $(wildcard $(SRC_DIR)/*.cc)
 SOURCES += $(wildcard $(UTIL_DIR)/*.cc)
 OBJS := $(call filter,%_test.cc,$(call patsubst,%.cc,%.o,$(call addprefix,$(OBJ_DIR)/,$(call notdir,$(SOURCES)))))
 
-BIN = ./bin/ccv-add ./bin/ccv-commit ./bin/ccv-reverse ./bin/ccv-branch ./bin/ccv-init
+BIN = ./bin/ccv-clone ./bin/ccv-add ./bin/ccv-commit ./bin/ccv-reverse ./bin/ccv-branch ./bin/ccv-merge ./bin/ccv-init
 
 #Define the final target which will be generate
 all: $(BIN) $(OBJS)
@@ -53,21 +53,28 @@ sinclude $(SOURCES:.cc=.d)
 #	$(CXX) -o $@ $(CPPFLAGS) $^
 #	rm -f $(SOURCES:.cc=.d)
 
-./bin/ccv-init: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/repertory.o ./obj/ccv-init.o
+./bin/ccv-init: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/diff.o ./obj/repertory.o ./obj/ccv-init.o
 	$(CXX) -o $@ $(CPPFLAGS) $^
 	rm -f $(SOURCES:.cc=.d)
 	
-./bin/ccv-commit: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/repertory.o ./obj/ccv-commit.o
+./bin/ccv-commit: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/diff.o ./obj/repertory.o ./obj/ccv-commit.o
 	$(CXX) -o $@ $(CPPFLAGS) $^
 
-./bin/ccv-reverse: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/repertory.o ./obj/ccv-reverse.o
+./bin/ccv-reverse: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/diff.o ./obj/repertory.o ./obj/ccv-reverse.o
 	$(CXX) -o $@ $(CPPFLAGS) $^
 
-./bin/ccv-add: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/repertory.o ./obj/ccv-add.o
+./bin/ccv-add: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/diff.o ./obj/repertory.o ./obj/ccv-add.o
 	$(CXX) -o $@ $(CPPFLAGS) $^
 
-./bin/ccv-branch: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/repertory.o ./obj/ccv-branch.o
+./bin/ccv-branch: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/diff.o ./obj/repertory.o ./obj/ccv-branch.o
 	$(CXX) -o $@ $(CPPFLAGS) $^
+
+./bin/ccv-merge: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/diff.o ./obj/repertory.o ./obj/ccv-merge.o
+	$(CXX) -o $@ $(CPPFLAGS) $^
+
+./bin/ccv-clone: ./obj/logcat.o ./obj/file.o ./obj/mempool.o ./obj/md5.o ./obj/transAction.o ./obj/tr.o ./obj/object.o ./obj/diff.o ./obj/repertory.o ./obj/transfer.o ./obj/ccv-clone.o
+	$(CXX) -o $@ $^ $(CPPFLAGS)  $(LDFLAG)
+
 #main:$(OBJS)
 #	$(CXX) -o main $(CPPFLAGS) $(OBJS)
 

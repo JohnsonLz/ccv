@@ -84,7 +84,6 @@ class MemPool {
 		static MemPool mp;
 		return mp;
 	}
-
 };
 
 void* allocate(size_t n); 
