@@ -50,6 +50,9 @@ int main(int argc, char* argv[]) {
 	db.checkRepertory();
 	try {
 		Transfer tf;
+		if(equal(argv[1], "test"))
+			tf.test();
+		else
 		tf.downloadWholeProject(argv[1]);
 	}
 	catch(Code c) {

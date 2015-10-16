@@ -57,8 +57,8 @@ namespace ccv {
 
 Transfer::Transfer() {
 
-	request_ = "GET %s HTTP/1.1\r\nAccept: application/json\r\nAccept-Language: zh-cn\r\nHost: %s\r\nConnection: close\r\n\r\n";
-	downloadUrl_ = "/%s?uri=%s/%s&range=%d-%d";
+	request_ = "GET %s HTTP/1.1\r\nAccept: application/json\r\nAccept-Language: zh-cn\r\nHost: %s\r\nConnection: Keep_Alive\r\n\r\n";
+	downloadUrl_ = "/%s?uri=%s%s&range=%d-%d";
 	downloadAPI_ = "ccv-api/controller/download.php";
 
 }
@@ -71,7 +71,7 @@ void Transfer::connect_(const char* host) {
 
 	sockfd_ = socket(AF_INET, SOCK_STREAM, 0);
 	if(sockfd_ < 0) {
-		log.w("create socker faile");
+		log.w("create socket faile");
 		throw CreateError;
 	}
 	bzero(&serverAddr_, sizeof(serverAddr_));
@@ -127,51 +127,140 @@ void Transfer::send_(char* buf) {
 	}
 }
 
-void Transfer::recv_(char* buf) {
+bool Transfer::recv_(char* buf, int len) {
 
 	int i=0;
-	while(recv(sockfd_, &buf[i], 1, 0)) {
+	while(recv(sockfd_, &buf[i], 1, 0)) { 
+
+		if(buf[i] == '}') {
+			buf[i+1] = '\0';
+			return false;
+		}
 		i++;
+		if(i == len ) {
+			buf[i] = '\0';
+			return true;
+		}
 	}
-	buf[i] = '\0';
-	close_();
 }
 
-void Transfer::parseResponse_(const char* response, char* jsonStr) {
+void Transfer::receiveAndParseResponse_(std::string& jsonStr) {
 
-	const char* start = strstr(response, "\r\n\r\n");
-	if(start == NULL) {
-		log.w("response is invaild");
-		throw IOError;
-	}
-	start += 4;
+	int BufSize = 1024;
+	char buf[BufSize];
 
-	int length;
-	int position = 0;
-	const char* body = start;
-	const char* ptmp;
-	char tmp[10];
-	while(true) {
-		ptmp = strchr(body, '\r');
-		if(NULL == ptmp) {
-			log.w("response body is invaild");
+	if(!recv_(buf, BufSize -1)) {
+		const char* start = strstr(buf, "\r\n\r\n");
+		if(start == NULL) {
+			log.w("response is invaild");
 			throw IOError;
 		}
-		int len = ptmp - body;
-		strncpy(tmp, body, len);
-		tmp[len] = '\0';
-		length = HexToInt_(tmp);
-		if(length == 0) {
-			//jsonStr[position] = '\0';
-			break;
-		}
-		body = ptmp + 2;
+		start += 4;
 
-		strncpy(jsonStr+position, body, length);
-		position += length;
-		body = body+length+2;
+		int length;
+		int position = 0;
+		const char* body = start;
+		const char* ptmp;
+		char tmp[10];
+		char jsonBuf[BufSize -1];
+		while(true) {
+			ptmp = strchr(body, '\r');
+			if(NULL == ptmp) {
+				log.w("response body is invaild");
+				throw IOError;
+			}
+			int len = ptmp - body;
+			strncpy(tmp, body, len);
+			tmp[len] = '\0';
+			length = HexToInt_(tmp);
+			body = ptmp + 2;
+
+			strncpy(jsonBuf, body, length);
+			jsonBuf[length] = '\0';
+			jsonStr.append(jsonBuf);
+			position += length;
+			body = body+length;
+			if(*(body-1) == '}') {
+				break;
+			}
+			body+=2;
+		}
+	}
+	else {
+		const char* start = strstr(buf, "\r\n\r\n");
+		if(start == NULL) {
+			log.w("response is invaild");
+			throw IOError;
+		}
+		start += 4;
+
+		int length;
+		int offset;
+		int bufContent = BufSize -1 - (start - buf);
+		const char* body = start;
+		const char* ptmp;
+		char tmp[10];
+		char jsonBuf[BufSize];
+
+		while(true) {
+			ptmp = strchr(body, '\r');
+			if(NULL == ptmp) {
+				log.w("response body is invaild");
+				throw IOError;
+			}
+			int len = ptmp - body;
+			strncpy(tmp, body, len);
+			tmp[len] = '\0';
+			length = HexToInt_(tmp);
+			body = ptmp + 2;
+
+			offset = len + 2;
+			bufContent -= offset;
+			
+			while(true) {
+				if(length == 0) {
+					if(bufContent < 14) {
+						recv_(const_cast<char*>(body+bufContent), 14);
+						bufContent += 14;
+					}
+
+					bufContent -= 2;
+					body += 2;
+					break;
+				}
+				if(length > bufContent) {
+
+					strncpy(jsonBuf, body, bufContent);
+					jsonBuf[bufContent] = '\0';
+					jsonStr.append(jsonBuf);
+
+					recv_(buf, BufSize-1);
+					body = buf;
+					length -= bufContent;
+					bufContent = BufSize -1;
+					continue;
+				}
+				else {
+					int les = bufContent - length;
+					strncpy(jsonBuf, body, length);
+					jsonBuf[length] = '\0';
+					jsonStr.append(jsonBuf);
+
+					if(jsonBuf[length -1] == '}') {
+						return;
+					}
+					
+					body += length;
+					length = 0;
+					bufContent = les;
+					continue;
+				}
+			}
+		}
 	}
 }
+
+
 
 void Transfer::createPath_(const char* item) {
 	
@@ -202,7 +291,7 @@ void Transfer::encodeBase64_(const char* Data, int DataByte, std::string& strEnc
 
     const char EncodeTable[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     unsigned char Tmp[4]={0};
-    int LineLength=0;
+   // int LineLength=0;
     for(int i=0;i<(int)(DataByte / 3);i++)
     {
         Tmp[1] = *Data++;
@@ -212,7 +301,7 @@ void Transfer::encodeBase64_(const char* Data, int DataByte, std::string& strEnc
         strEncode+= EncodeTable[((Tmp[1] << 4) | (Tmp[2] >> 4)) & 0x3F];
         strEncode+= EncodeTable[((Tmp[2] << 2) | (Tmp[3] >> 6)) & 0x3F];
         strEncode+= EncodeTable[Tmp[3] & 0x3F];
-        if(LineLength+=4,LineLength==76) {strEncode+="\r\n";LineLength=0;}
+        //if(LineLength+=4,LineLength==76) {strEncode+="\r\n";LineLength=0;}
     }
     int Mod=DataByte % 3;
     if(Mod==1)
@@ -295,8 +384,7 @@ void Transfer::freeInfo_(void* ptr) {
 void Transfer::downloadItem_(const char* repertory, const char* item, const char* host, const char* dst) {
 
 	int start = 0;
-	int end = 4095;
-	char urlBuf[512];
+	int end = 102399;
 	if(access(dst, F_OK) == 0) {
 		return;
 	}
@@ -306,18 +394,18 @@ void Transfer::downloadItem_(const char* repertory, const char* item, const char
 		throw IOError;
 	}
 	AddTransAction(dst);
-	char buf[1024*6];
-	char jsonBuf[1024*6];
 
 	while(true) {
+		char urlBuf[512];
+		char buf[1024];
 		sprintf(urlBuf, downloadUrl_, downloadAPI_, repertory, item, start, end);
 		sprintf(buf, request_, urlBuf, host);
 		connect_("127.0.0.1");
 		send_(buf);
-		recv_(buf);
-		parseResponse_(buf, jsonBuf);
+		std::string jsonStr;
+		jsonStr.erase();
+		receiveAndParseResponse_(jsonStr);
 
-		std::string jsonStr(jsonBuf);
 		Json::Reader reader;
 		Json::Value value;
 
@@ -326,29 +414,33 @@ void Transfer::downloadItem_(const char* repertory, const char* item, const char
 			if(!equal("true", success.c_str())) {
 				log.w("request error");
 				fclose(fp);
+				close_();
 				std::string errno = value["errno"].asString();
 				log.w("%s", errno.c_str());
 				throw IOError;
 			}
 			int len = value["length"].asInt();
 			std::string data = value["data"].asString();
+
 			std::string decode;
 			int outlen = 0;
 			decodeBase64_(data.c_str(), len, outlen, decode);
 			int write = fwrite(decode.c_str(), 1, outlen, fp);
 			if(write != outlen) {
 				fclose(fp);
+				close_();
 				log.w("IOError: write error");
 				throw IOError;
 			}
-			if(outlen < 4* 1024) {
+			if(outlen < 102400) {
 				break;
 			}
 		}
 		start = end+1;
-		end += 4096;
+		end += 102400;
 	}
 	fclose(fp);
+	close_();
 
 }
 
@@ -361,14 +453,16 @@ void Transfer::downloadDemo(const char* demoMd5, const char* rep, const char* ho
 	
 	const char* demo = packTRFileName(demoPath, demoMd5);
 	// rep = /Johnson/test demo+4 = /demo/xx
-	downloadItem_(rep, demo+4, host, demo);
-	char* md5 = MD5_file(demo, MD5LEN);
-	if(!equal(md5, demoMd5)) {
-		log.w("Transfer failed %s", demo+4);
+	if(access(demo, F_OK) != 0) {
+		downloadItem_(rep, demo+4, host, demo);
+		char* md5 = MD5_file(demo, MD5LEN);
+		if(!equal(md5, demoMd5)) {
+			log.w("Transfer failed %s", demo+4);
+			//dellocate(md5);
+			//throw Corruption;
+		}
 		dellocate(md5);
-		throw Corruption;
 	}
-	dellocate(md5);
 
 	List<info> ls;
 	parseTRFile(demo, &ls, false);
@@ -377,15 +471,18 @@ void Transfer::downloadDemo(const char* demoMd5, const char* rep, const char* ho
 	dellocate(const_cast<char*>(demo));
 	while(iter != ls.end()) {
 		const char* ref = packSourceFileName(refPath, iter->data->getRef());
-		downloadItem_(rep, ref+4, host, ref);
-		md5 = MD5_file(ref, MD5LEN);
-		dellocate(const_cast<char*>(ref));
-		if(!equal(md5, iter->data->getRef())) {
-			log.w("Transfer failed %s", iter->data->getRef());
+		if(access(ref, F_OK) != 0) {
+			downloadItem_(rep, ref+4, host, ref);
+			char* md5 = MD5_file(ref, MD5LEN);
+			if(!equal(md5, iter->data->getRef())) {
+				log.w("Transfer failed %s", iter->data->getTag());
+				log.w("Transfer failed %s", iter->data->getRef());
+				//dellocate(md5);
+				//throw Corruption;
+			}
 			dellocate(md5);
-			throw Corruption;
 		}
-		dellocate(md5);
+		dellocate(const_cast<char*>(ref));
 		iter = iter->next;
 	}
 	ls.freeValueType(freeInfo_);
@@ -416,10 +513,11 @@ void Transfer::downloadWholeProject(const char* url) {
 	}
 	p += 7;
 	const char* rep = strchr(p, '/');
-	int hostLength = rep - p;
+	int hostLength = rep - p ;
 	char* host = static_cast<char*>(allocate(hostLength + 1));
 	strncpy(host, p, hostLength);
 	host[hostLength] = '\0';
+	rep++;
 
 	char buf[bufferSize];
 	const char* trash = packSourceFileName(trashPath, "branchInfo1");
@@ -513,7 +611,10 @@ void Transfer::downloadWholeProject(const char* url) {
 
 }
 
+void Transfer::test() {
 
+	downloadItem_("Johnson/test", "/repertory.cc", "localhost", "./repertory.cc");
+}
 
 	
 	

@@ -52,13 +52,14 @@ class Transfer {
 	void connect_(const char* host);
 	void close_();
 	int HexToInt_(const char* str);
-	void parseResponse_(const char* response, char* jsonStr);
+	void receiveAndParseResponse_(std::string& jsonStr);
 	void createPath_(const char* item);
 	void uploadItem_(const char* item, const char* host);
 	void downloadItem_(const char* repertory, const char* item, const char* host, const char* dst);
 
 	void send_(char* buf);
-	void recv_(char* buf);
+	// unsafe long link recv_
+	bool recv_(char* buf, int len);
 
 	void encodeBase64_(const char* data, int len, std::string& encodeStr);
 	void decodeBase64_(const char* data, int len, int& outlen, std::string& decodeStr);
@@ -74,6 +75,7 @@ class Transfer {
 	void downloadWholeProject(const char* url);
 	void downloadDemo(const char* demoMd5, const char* rep, const char* host);
 
+	void test();
 };
 
 }//namespace ccv

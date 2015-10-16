@@ -12,6 +12,7 @@ try {
 		'range' => $_GET['range']
 	));
 
+
 	echo json_encode($result, JSON_UNESCAPED_SLASHES);
 	exit();
 }
